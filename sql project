@@ -1,0 +1,136 @@
+
+use project;
+
+select count(*) from customers;  -- total number of customers
+
+select count(*) from customers where Status ='Active';  -- active customers 
+select count(*) from customers where region = 'Europe';  -- europe customers 
+select count(*) from customers where JoinDate > "2021-01-01";  -- joined after jan 2001
+SET  SQL_SAFE_UPDATES=0;
+update customers 
+set JoinDate = STR_TO_DATE(JoinDate,'%d-%m-%Y')
+WHERE JoinDate like '%-%-%';
+
+update transactions 
+set TransactionDate = str_to_date(TransactionDate, '%d-%m-%Y')
+where TransactionDate like '%-%-%';
+
+select count(*) from customers where year(JoinDate) = 2021;
+
+select count(*) from customers where JoinDate between '2001-01-01' and '2021-01-01';
+
+
+-- customers with the email example in it 
+select count(*) from customers where email like '%example%';
+
+-- customers with an annual subscription plan 
+select count(*) from customers c join subscriptions s on c.CustomerID=s.CustomerID  where s.PlanType = 'Annual'  and c.Status = 'Active';
+ select count(*) from transactions where Amount > 100;
+ 
+ -- retrieve all customers with first name,last name , transaction amount and transaction id
+ select c.FirstName,c.LastName,t.Amount,t.TransactionID
+ from customers c 
+ join transactions t 
+ on c.CustomerID=t.CustomerID;
+ 
+ 
+ -- retrieve the reasons for customer churn 
+ select count(*), reason from churn group by reason;
+ 
+ 
+ -- retrieve customerid,full name,email,plan type 
+ 
+ select c.CustomerID,concat(c.FirstName," ",c.LastName) as fullname,c.email,s.plantype
+ from customers c 
+ join subscriptions s 
+ on c.CustomerID=s.CustomerID;
+ 
+ -- list down the reasons for churn for northamerican customers 
+ select c.reason,count(*) as countofreasons
+from churn c 
+join customers cs on c.CustomerID=cs.CustomerID 
+where region = 'North America'
+group by c.reason
+order by countofreasons desc; 
+  
+-- customers who have churned and made transactions 
+select count(*)
+from churn c 
+join transactions t  on c.customerid= t.customerid 
+where transactiontype is not null;
+
+-- customers who have not made any transactions 
+select count(*) 
+from customers c 
+left join transactions t on c.customerid=t.customerid 
+where t.transactiontype is null;
+
+-- customers with more than one plan type 
+select c.customerid ,count(*)
+from customers c 
+join subscriptions s on c.customerid=s.customerid 
+group by c.customerid
+having count(s.plantype) > 1;
+
+
+-- customers who do not have any subscription 
+
+select c.customerid,count(*) 
+from customers c 
+left join subscriptions s on c.customerid=s.customerid 
+where s.plantype is null
+group by c.customerid ;
+
+
+
+-- find customers with fill name,have annual subscription and then churned 
+select concat(c.firstname," ",c.lastname) as full_name
+from customers c 
+join subscriptions s   on c.customerid=s.customerid 
+where s.plantype='Annual' and c.customerid in (select ch.customerid from churn ch);
+
+
+
+
+-- for each month in 2024 show me the number of churn and transactiion value 
+select date_format(t.transactiondate,'%Y-%m') as month ,
+sum(t.amount) as totalvalue,count(distinct ch.customerid) as totalchurn 
+from transactions t 
+ left join churn ch on t.customerid=ch.customerid and date_format(t.transactiondate,'%Y-%m')
+where year(t.transactiondate)=2024
+group by  date_format(t.transactiondate,'%Y-%m') 
+order by month;
+
+-- identify customerrs who made their purchase after the subscription ended 
+
+select firstname,lastname from customers where customerid in (
+select distinct t.customerid
+from transactions t 
+join subscriptions s on t.customerid=s.customerid 
+where t.transactiondate>s.enddate and t.transactiontype = 'Purchase');
+
+-- for each month of 2024 show me the total purchase 
+select date_format(transactiondate,'%Y-%m') as month, sum(amount) as revenue 
+from transactions 
+where year(transactiondate) = 2024 and transactiontype = 'Purchase'
+group by date_format(transactiondate,'%Y-%m')
+order by month;
+
+-- list out customer names and dates if their subscription ended before they churned 
+
+select concat(c. firstname," ",c. lastname) as full_name,max(s.enddate) as subscription_enddate
+from subscriptions s 
+join churn ch on s.customerid=ch.customerid  
+join customers c on s.customerid=c.customerid 
+where s.enddate < ch.churndate
+group by concat(c. firstname," ",c. lastname)
+order by max(s.enddate) ;
+
+
+-- percentage of churn per plan type 
+select 
+100 * count(case when plantype= 'Annual' then 1 end)/count(*)  as annual_churn_rate,
+100 * count(case when plantype= 'Monthly' then 1 end)/count(*) as monthly_churn_rate
+from subscriptions  s 
+join churn ch on s.customerid=ch.customerid 
+where ch.churndate > s.enddate;
